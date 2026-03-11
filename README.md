@@ -18,6 +18,7 @@ Copy `.env.example` to `.env` and fill values:
 - `FIRESTORE_COLLECTION=contact_submissions`
 - Firebase credentials using one of:
   - `FIREBASE_SERVICE_ACCOUNT_KEY` (JSON string), or
+  - `FIREBASE_KEY_PART_1` + `FIREBASE_KEY_PART_2` (split JSON string), or
   - `FIREBASE_SERVICE_ACCOUNT_BASE64` (base64 JSON), or
   - `GOOGLE_APPLICATION_CREDENTIALS` path
 

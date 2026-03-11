@@ -21,6 +21,9 @@ function initFirebase() {
 
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
     credentials = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+  } else if (process.env.FIREBASE_KEY_PART_1 && process.env.FIREBASE_KEY_PART_2) {
+    const merged = `${process.env.FIREBASE_KEY_PART_1}${process.env.FIREBASE_KEY_PART_2}`;
+    credentials = JSON.parse(merged);
   } else if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
     const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, "base64").toString("utf8");
     credentials = JSON.parse(decoded);
