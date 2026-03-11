@@ -25,14 +25,23 @@ function initFirebase() {
     process.env.FIREBASE_KEY_PART_4
   ].filter(Boolean);
 
+  function parseServiceAccount(value) {
+    const input = String(value || "").trim();
+    if (!input) return null;
+    if (input.startsWith("{")) {
+      return JSON.parse(input);
+    }
+    const decoded = Buffer.from(input, "base64").toString("utf8");
+    return JSON.parse(decoded);
+  }
+
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-    credentials = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    credentials = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
   } else if (keyParts.length >= 2) {
     const merged = keyParts.join("");
-    credentials = JSON.parse(merged);
+    credentials = parseServiceAccount(merged);
   } else if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
-    const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, "base64").toString("utf8");
-    credentials = JSON.parse(decoded);
+    credentials = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64);
   }
 
   if (credentials) {
