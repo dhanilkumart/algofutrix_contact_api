@@ -18,11 +18,17 @@ function initFirebase() {
   if (admin.apps.length) return admin.app();
 
   let credentials = null;
+  const keyParts = [
+    process.env.FIREBASE_KEY_PART_1,
+    process.env.FIREBASE_KEY_PART_2,
+    process.env.FIREBASE_KEY_PART_3,
+    process.env.FIREBASE_KEY_PART_4
+  ].filter(Boolean);
 
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
     credentials = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-  } else if (process.env.FIREBASE_KEY_PART_1 && process.env.FIREBASE_KEY_PART_2) {
-    const merged = `${process.env.FIREBASE_KEY_PART_1}${process.env.FIREBASE_KEY_PART_2}`;
+  } else if (keyParts.length >= 2) {
+    const merged = keyParts.join("");
     credentials = JSON.parse(merged);
   } else if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
     const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, "base64").toString("utf8");
