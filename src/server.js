@@ -1,9 +1,32 @@
-require("dotenv").config();
-
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const admin = require("firebase-admin");
+const fs = require('fs');
+const path = require('path');
+const { Readable } = require('stream');
+
+// --- START WORKAROUND FOR HOSTINGER/PASSENGER EEXIST ERROR ---
+// Some environments (like Hostinger/Passenger) crash with EEXIST when process.stdin is accessed.
+// We stub it here to avoid the crash if it hasn't been initialized yet.
+try {
+  const originalStdinGetter = Object.getOwnPropertyDescriptor(process, 'stdin')?.get;
+  if (!process.stdin || !originalStdinGetter) {
+    const dummyStdin = new Readable();
+    dummyStdin._read = () => {};
+    dummyStdin.isTTY = false;
+    Object.defineProperty(process, 'stdin', {
+      value: dummyStdin,
+      configurable: true,
+      writable: true
+    });
+  }
+} catch (e) {
+  console.warn("[Workaround] Failed to stub process.stdin:", e.message);
+}
+// --- END WORKAROUND ---
+
+require("dotenv").config();
 
 const app = express();
 
@@ -45,8 +68,6 @@ function initFirebase() {
   } else {
     // Try to load from root service-account.json if it exists
     try {
-      const fs = require('fs');
-      const path = require('path');
       const saPath = path.join(process.cwd(), 'service-account.json');
       if (fs.existsSync(saPath)) {
         credentials = JSON.parse(fs.readFileSync(saPath, 'utf8'));
