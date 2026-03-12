@@ -103,18 +103,29 @@ app.post("/api/contact", async (req, res) => {
       source: "website"
     });
 
+    console.log(`Successfully saved contact from ${email}`);
     return res.status(201).json({ ok: true, message: "Submitted successfully." });
   } catch (error) {
     console.error("Contact submission failed:", error);
-    return res.status(500).json({ error: "Internal server error." });
+    // Include the actual error message in the response for debugging purposes
+    return res.status(500).json({ 
+      error: "Internal server error.", 
+      debug: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
-app.use((err, _req, res, _next) => {
+app.use((err, req, res, _next) => {
+  console.error("Global error handler caught:", err);
   if (err && err.message === "Not allowed by CORS") {
-    return res.status(403).json({ error: "CORS blocked this origin." });
+    return res.status(403).json({ error: "CORS blocked this origin.", origin: req.get('Origin') });
   }
-  return res.status(500).json({ error: "Internal server error." });
+  return res.status(500).json({ 
+    error: "Internal server error.", 
+    debug: err.message,
+    origin: req.get('Origin')
+  });
 });
 
 app.listen(PORT, () => {
