@@ -42,6 +42,18 @@ function initFirebase() {
     credentials = parseServiceAccount(merged);
   } else if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
     credentials = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64);
+  } else {
+    // Try to load from root service-account.json if it exists
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const saPath = path.join(process.cwd(), 'service-account.json');
+      if (fs.existsSync(saPath)) {
+        credentials = JSON.parse(fs.readFileSync(saPath, 'utf8'));
+      }
+    } catch (e) {
+      console.warn("Could not load service-account.json from disk:", e.message);
+    }
   }
 
   if (credentials) {
@@ -66,6 +78,7 @@ app.use(
     origin(origin, callback) {
       if (!origin) return callback(null, true);
       if (CORS_ORIGINS.length === 0) return callback(null, true);
+      if (CORS_ORIGINS.includes("*")) return callback(null, true);
       if (CORS_ORIGINS.includes(origin)) return callback(null, true);
       return callback(new Error("Not allowed by CORS"));
     }
@@ -107,11 +120,11 @@ app.post("/api/contact", async (req, res) => {
     return res.status(201).json({ ok: true, message: "Submitted successfully." });
   } catch (error) {
     console.error("Contact submission failed:", error);
-    // Include the actual error message in the response for debugging purposes
+    // Always include stack trace for now to debug Hostinger issue
     return res.status(500).json({ 
       error: "Internal server error.", 
       debug: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      stack: error.stack
     });
   }
 });
@@ -124,6 +137,7 @@ app.use((err, req, res, _next) => {
   return res.status(500).json({ 
     error: "Internal server error.", 
     debug: err.message,
+    stack: err.stack,
     origin: req.get('Origin')
   });
 });
