@@ -16,6 +16,7 @@ Copy `.env.example` to `.env` and fill values:
 - `PORT=3000`
 - `CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com`
 - `FIRESTORE_COLLECTION=contact_submissions`
+- `TURNSTILE_SECRET_KEY=<your_cloudflare_turnstile_secret>`
 - Firebase credentials using one of:
   - `FIREBASE_SERVICE_ACCOUNT_KEY` (JSON string), or
   - `FIREBASE_KEY_PART_1` ... `FIREBASE_KEY_PART_4` (split JSON string, use 2-4 parts), or
@@ -57,6 +58,14 @@ const CONTACT_API_URL = 'https://api.yourdomain.com/api/contact';
 ```
 
 Replace `api.yourdomain.com` with your deployed API URL.
+
+Also set a site key in frontend before `main.js` loads:
+
+```html
+<script>
+  window.CAPTCHA_SITE_KEY = 'your_cloudflare_turnstile_site_key';
+</script>
+```
 
 ## Hostinger notes
 

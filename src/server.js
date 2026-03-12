@@ -38,10 +38,33 @@ const app = express();
 
 const PORT = Number(process.env.PORT || 3000);
 const COLLECTION = process.env.FIRESTORE_COLLECTION || "contact_submissions";
+const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || "";
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || "")
   .split(",")
   .map((v) => v.trim())
   .filter(Boolean);
+
+async function verifyTurnstile(token, remoteIp) {
+  if (!TURNSTILE_SECRET_KEY) {
+    throw new Error("TURNSTILE_SECRET_KEY is missing.");
+  }
+  const payload = new URLSearchParams({
+    secret: TURNSTILE_SECRET_KEY,
+    response: token,
+    remoteip: remoteIp || ""
+  });
+  const verifyResponse = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: payload.toString()
+  });
+  if (!verifyResponse.ok) {
+    return { success: false };
+  }
+  return verifyResponse.json();
+}
 
 function initFirebase() {
   if (admin.apps.length) return admin.app();
@@ -123,14 +146,23 @@ app.post("/api/contact", async (req, res) => {
     const email = String(req.body.email || "").trim();
     const service = String(req.body.service || "").trim();
     const details = String(req.body.details || "").trim();
+    const captchaToken = String(req.body.captchaToken || "").trim();
 
     if (!email) {
       return res.status(400).json({ error: "Email is required." });
+    }
+    if (!captchaToken) {
+      return res.status(400).json({ error: "Captcha is required." });
     }
 
     const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     if (!emailOk) {
       return res.status(400).json({ error: "Invalid email format." });
+    }
+
+    const captchaResult = await verifyTurnstile(captchaToken, req.ip);
+    if (!captchaResult.success) {
+      return res.status(400).json({ error: "Captcha verification failed." });
     }
 
     await db.collection(COLLECTION).add({
@@ -147,26 +179,16 @@ app.post("/api/contact", async (req, res) => {
     return res.status(201).json({ ok: true, message: "Submitted successfully." });
   } catch (error) {
     console.error("Contact submission failed:", error);
-    // Always include stack trace for now to debug Hostinger issue
-    return res.status(500).json({ 
-      error: "Internal server error.", 
-      debug: error.message,
-      stack: error.stack
-    });
+    return res.status(500).json({ error: "Internal server error." });
   }
 });
 
 app.use((err, req, res, _next) => {
   console.error("Global error handler caught:", err);
   if (err && err.message === "Not allowed by CORS") {
-    return res.status(403).json({ error: "CORS blocked this origin.", origin: req.get('Origin') });
+    return res.status(403).json({ error: "CORS blocked this origin." });
   }
-  return res.status(500).json({ 
-    error: "Internal server error.", 
-    debug: err.message,
-    stack: err.stack,
-    origin: req.get('Origin')
-  });
+  return res.status(500).json({ error: "Internal server error." });
 });
 
 app.listen(PORT, () => {
