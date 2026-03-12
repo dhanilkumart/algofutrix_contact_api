@@ -30,15 +30,15 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
-const admin = require("firebase-admin");
-const fs = require('fs');
-const path = require('path');
 
 const app = express();
 
 const PORT = Number(process.env.PORT || 3000);
-const COLLECTION = process.env.FIRESTORE_COLLECTION || "contact_submissions";
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || "";
+const EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID || "";
+const EMAILJS_TEMPLATE_ID = process.env.EMAILJS_TEMPLATE_ID || "";
+const EMAILJS_PUBLIC_KEY = process.env.EMAILJS_PUBLIC_KEY || "";
+const EMAILJS_PRIVATE_KEY = process.env.EMAILJS_PRIVATE_KEY || "";
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || "")
   .split(",")
   .map((v) => v.trim())
@@ -66,59 +66,30 @@ async function verifyTurnstile(token, remoteIp) {
   return verifyResponse.json();
 }
 
-function initFirebase() {
-  if (admin.apps.length) return admin.app();
-
-  let credentials = null;
-  const keyParts = [
-    process.env.FIREBASE_KEY_PART_1,
-    process.env.FIREBASE_KEY_PART_2,
-    process.env.FIREBASE_KEY_PART_3,
-    process.env.FIREBASE_KEY_PART_4
-  ].filter(Boolean);
-
-  function parseServiceAccount(value) {
-    const input = String(value || "").trim();
-    if (!input) return null;
-    if (input.startsWith("{")) {
-      return JSON.parse(input);
-    }
-    const decoded = Buffer.from(input, "base64").toString("utf8");
-    return JSON.parse(decoded);
+async function sendEmailViaEmailJS(payload) {
+  if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY || !EMAILJS_PRIVATE_KEY) {
+    throw new Error("EmailJS environment variables are missing.");
   }
 
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-    credentials = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-  } else if (keyParts.length >= 2) {
-    const merged = keyParts.join("");
-    credentials = parseServiceAccount(merged);
-  } else if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
-    credentials = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64);
-  } else {
-    // Try to load from root service-account.json if it exists
-    try {
-      const saPath = path.join(process.cwd(), 'service-account.json');
-      if (fs.existsSync(saPath)) {
-        credentials = JSON.parse(fs.readFileSync(saPath, 'utf8'));
-      }
-    } catch (e) {
-      console.warn("Could not load service-account.json from disk:", e.message);
-    }
-  }
-
-  if (credentials) {
-    return admin.initializeApp({
-      credential: admin.credential.cert(credentials)
-    });
-  }
-
-  return admin.initializeApp({
-    credential: admin.credential.applicationDefault()
+  const response = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      service_id: EMAILJS_SERVICE_ID,
+      template_id: EMAILJS_TEMPLATE_ID,
+      user_id: EMAILJS_PUBLIC_KEY,
+      accessToken: EMAILJS_PRIVATE_KEY,
+      template_params: payload
+    })
   });
-}
 
-initFirebase();
-const db = admin.firestore();
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(`EmailJS request failed with status ${response.status}. ${errorText}`);
+  }
+}
 
 app.use(helmet());
 app.use(express.json({ limit: "32kb" }));
@@ -165,17 +136,17 @@ app.post("/api/contact", async (req, res) => {
       return res.status(400).json({ error: "Captcha verification failed." });
     }
 
-    await db.collection(COLLECTION).add({
+    await sendEmailViaEmailJS({
+      first_name: firstName.slice(0, 120),
+      last_name: lastName.slice(0, 120),
       email,
-      firstName: firstName.slice(0, 120),
-      lastName: lastName.slice(0, 120),
       service: service.slice(0, 240),
       details: details.slice(0, 5000),
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      source: "website"
+      submitted_at: new Date().toISOString(),
+      source: "algofutrix.com"
     });
 
-    console.log(`Successfully saved contact from ${email}`);
+    console.log(`Successfully sent contact email for ${email}`);
     return res.status(201).json({ ok: true, message: "Submitted successfully." });
   } catch (error) {
     console.error("Contact submission failed:", error);
